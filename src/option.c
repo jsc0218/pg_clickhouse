@@ -692,6 +692,8 @@ _PG_init(void) {
         NULL
     );
 
+    chfdw_install_subquery_in_hook();
+
 #if PG_VERSION_NUM >= 150000
     MarkGUCPrefixReserved("pg_clickhouse");
 #endif

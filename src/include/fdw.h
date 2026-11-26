@@ -581,4 +581,8 @@ time_diff(struct timeval* prior, struct timeval* latter);
 extern bool
 chfdw_translate_to_char_format(const char* pgfmt, StringInfo out);
 
+
+/* subquery_in.c */
+extern void chfdw_install_subquery_in_hook(void);
+
 #endif /* CLICKHOUSE_FDW_H */

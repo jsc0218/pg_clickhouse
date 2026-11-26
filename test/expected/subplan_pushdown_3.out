@@ -148,23 +148,17 @@ SELECT item_id, grp FROM items
 WHERE item_id IN (SELECT item_id FROM sales
                   GROUP BY item_id HAVING sum(amount) > 150.00)
 ORDER BY item_id;
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Merge Join
+                                                                                                              QUERY PLAN                                                                                                               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Foreign Scan on subplan_test.items
    Output: items.item_id, items.grp
-   Inner Unique: true
-   Merge Cond: (items.item_id = sales.item_id)
-   ->  Foreign Scan on subplan_test.items
-         Output: items.item_id, items.grp, items.price, items.qty
-         Remote SQL: SELECT item_id, grp FROM subplan_test.items ORDER BY item_id ASC NULLS LAST
-   ->  GroupAggregate
-         Output: sales.item_id
-         Group Key: sales.item_id
-         Filter: (sum(sales.amount) > 150.00)
-         ->  Foreign Scan on subplan_test.sales
-               Output: sales.sale_id, sales.item_id, sales.amount, sales.region
-               Remote SQL: SELECT item_id, amount FROM subplan_test.sales ORDER BY item_id ASC NULLS LAST
-(14 rows)
+   Remote SQL: SELECT item_id, grp FROM subplan_test.items r1 WHERE ((r1.item_id IN (SELECT q1_1.item_id FROM subplan_test.sales q1_1 GROUP BY q1_1.item_id HAVING ((sum(q1_1.amount) > 150.00))))) ORDER BY r1.item_id ASC NULLS LAST
+   SubPlan 1
+     ->  Foreign Scan
+           Output: sales.item_id
+           Relations: Aggregate on (sales)
+           Remote SQL: SELECT item_id FROM subplan_test.sales GROUP BY item_id HAVING ((sum(amount) > 150.00))
+(8 rows)
 
 SELECT item_id, grp FROM items
 WHERE item_id IN (SELECT item_id FROM sales
