@@ -30,6 +30,21 @@
          12 | 48.00
 (5 rows)
 
+-- the sublink inside a view is kept pushable too
+ single_remote_query 
+---------------------
+ t
+(1 row)
+
+ o_orderkey |  qty  
+------------+-------
+          8 | 31.98
+          9 | 36.00
+         10 | 39.99
+         11 | 43.98
+         12 | 48.00
+(5 rows)
+
 -- a local table in the tested expression is left alone
  k  
 ----
