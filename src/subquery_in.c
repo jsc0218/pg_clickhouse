@@ -17,8 +17,9 @@
  * foreign tables, and the tested expression uses only pg_clickhouse columns
  * from the same server. Everything else is left to the planner untouched.
  *
- * The hook runs at parse analysis, so the library must already be loaded in
- * the session (session_preload_libraries = 'pg_clickhouse').
+ * The hook is a planner_hook, so it sees the query after view expansion and
+ * before sublink pull-up. The library must already be loaded in the session
+ * (session_preload_libraries = 'pg_clickhouse'), or the hook never runs.
  */
 #include "postgres.h"
 
@@ -29,11 +30,11 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
-#include "parser/analyze.h"
+#include "optimizer/planner.h"
 #include "parser/parsetree.h"
 #include "utils/guc.h"
 
-static post_parse_analyze_hook_type prev_post_parse_analyze_hook = NULL;
+static planner_hook_type prev_planner_hook = NULL;
 static bool ch_pushdown_subquery_in                              = true;
 
 static bool
@@ -146,14 +147,31 @@ walk_query(Query* q) {
     }
 }
 
-static void
-chfdw_post_parse_analyze(ParseState* pstate, Query* query, JumbleState* jstate) {
-    if (prev_post_parse_analyze_hook) {
-        prev_post_parse_analyze_hook(pstate, query, jstate);
+static PlannedStmt*
+chfdw_planner(
+    Query* parse,
+    const char* query_string,
+    int cursorOptions,
+    ParamListInfo boundParams
+#if PG_VERSION_NUM >= 180000
+    ,
+    ExplainState* es
+#endif
+) {
+    if (ch_pushdown_subquery_in && parse->commandType == CMD_SELECT) {
+        walk_query(parse);
     }
-    if (ch_pushdown_subquery_in && query->commandType == CMD_SELECT) {
-        walk_query(query);
+#if PG_VERSION_NUM >= 180000
+    if (prev_planner_hook) {
+        return prev_planner_hook(parse, query_string, cursorOptions, boundParams, es);
     }
+    return standard_planner(parse, query_string, cursorOptions, boundParams, es);
+#else
+    if (prev_planner_hook) {
+        return prev_planner_hook(parse, query_string, cursorOptions, boundParams);
+    }
+    return standard_planner(parse, query_string, cursorOptions, boundParams);
+#endif
 }
 
 void
@@ -164,7 +182,7 @@ chfdw_install_subquery_in_hook(void) {
         "Postgres turns such a sublink into a semi-join that cannot be pushed "
         "down, so the foreign tables are read in full. When this is on, the "
         "sublink is kept as a SubPlan and shipped to ClickHouse. Takes effect "
-        "only if pg_clickhouse is loaded at parse time, for example through "
+        "only if pg_clickhouse is loaded before planning, for example through "
         "session_preload_libraries.",
         &ch_pushdown_subquery_in,
         true,
@@ -174,6 +192,6 @@ chfdw_install_subquery_in_hook(void) {
         NULL,
         NULL
     );
-    prev_post_parse_analyze_hook = post_parse_analyze_hook;
-    post_parse_analyze_hook      = chfdw_post_parse_analyze;
+    prev_planner_hook = planner_hook;
+    planner_hook      = chfdw_planner;
 }

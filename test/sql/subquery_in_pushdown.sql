@@ -2,7 +2,7 @@
 SET client_min_messages = notice;
 SET session timezone = 'UTC';
 
--- The hook runs at parse time, so the library has to be loaded first.
+-- The hook is a planner hook, so the library has to be loaded first.
 LOAD 'pg_clickhouse';
 
 -- x IN (SELECT ... GROUP BY ... HAVING ...) over ClickHouse tables used to
@@ -93,6 +93,19 @@ WHERE o.o_orderkey IN (SELECT l_orderkey FROM siq.lines
   AND o.o_orderkey = l.l_orderkey
 GROUP BY o.o_orderkey ORDER BY o.o_orderkey;
 RESET pg_clickhouse.pushdown_subquery_in;
+
+\echo -- the sublink inside a view is kept pushable too
+CREATE TEMP VIEW siq_big_orders AS
+SELECT o.o_orderkey, sum(l.l_quantity) AS qty
+FROM siq.orders o, siq.lines l
+WHERE o.o_orderkey IN (SELECT l_orderkey FROM siq.lines
+                       GROUP BY l_orderkey HAVING sum(l_quantity) > 30)
+  AND o.o_orderkey = l.l_orderkey
+GROUP BY o.o_orderkey;
+SELECT siq_foreign_scans($q$SELECT * FROM siq_big_orders$q$) = 1
+    AS single_remote_query;
+SELECT * FROM siq_big_orders ORDER BY o_orderkey;
+DROP VIEW siq_big_orders;
 
 \echo -- a local table in the tested expression is left alone
 CREATE TEMP TABLE siq_local (k int);
