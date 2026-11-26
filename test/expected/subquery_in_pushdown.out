@@ -1,0 +1,42 @@
+\unset ECHO
+-- IN (aggregate subquery) is pushed down as part of the remote query
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Foreign Scan
+   Relations: Aggregate on ((orders o) INNER JOIN (lines l))
+(2 rows)
+
+ o_orderkey |  sum  
+------------+-------
+          8 | 31.98
+          9 | 36.00
+         10 | 39.99
+         11 | 43.98
+         12 | 48.00
+(5 rows)
+
+-- with the setting off the planner keeps its semi-join, same rows
+ not_a_single_remote_query 
+---------------------------
+ t
+(1 row)
+
+ o_orderkey |  sum  
+------------+-------
+          8 | 31.98
+          9 | 36.00
+         10 | 39.99
+         11 | 43.98
+         12 | 48.00
+(5 rows)
+
+-- a local table in the tested expression is left alone
+ k  
+----
+  9
+ 12
+(2 rows)
+
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to foreign table siq.lines
+drop cascades to foreign table siq.orders
